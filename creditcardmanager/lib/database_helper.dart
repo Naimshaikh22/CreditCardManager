@@ -2,87 +2,54 @@ import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 
 class LocalDatabase {
-  static final LocalDatabase _instance = LocalDatabase._internal();
-  static LocalDatabase get instance => _instance;
+  static final LocalDatabase instance = LocalDatabase._init();
+  static Database? _database;
 
-  Database? _database;
-
-  LocalDatabase._internal();
+  LocalDatabase._init();
 
   Future<Database> get database async {
     if (_database != null) return _database!;
-
-    _database = await _initDatabase();
+    _database = await _initDB('cards.db');
     return _database!;
   }
 
-  Future<Database> _initDatabase() async {
+  Future<Database> _initDB(String filePath) async {
     final dbPath = await getDatabasesPath();
-    final path = join(dbPath, 'credit_cards.db');
-
-    return await openDatabase(
-      path,
-      version: 1,
-      onCreate: (db, version) async {
-        await db.execute('''
-          CREATE TABLE credit_cards(
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            cardNumber TEXT NOT NULL,
-            company TEXT NOT NULL,
-            dueDate TEXT NOT NULL,
-            currentDueAmount REAL NOT NULL,
-            totalDueAmount REAL NOT NULL,
-            synced INTEGER DEFAULT 0
-          )
-        ''');
-      },
-    );
+    final path = join(dbPath, filePath);
+    return await openDatabase(path, version: 1, onCreate: _onCreate);
   }
 
-  Future<int> insertCard(Map<String, dynamic> cardData) async {
+  Future _onCreate(Database db, int version) async {
+    await db.execute('''
+      CREATE TABLE cards(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        cardNumber TEXT,
+        company TEXT,
+        dueDate TEXT,
+        currentDueAmount REAL,
+        totalDueAmount REAL,
+        synced INTEGER
+      )
+    ''');
+  }
+
+  Future<void> insertCard(Map<String, dynamic> cardData) async {
     final db = await database;
-    return await db.insert(
-      'credit_cards',
-      cardData,
-      conflictAlgorithm: ConflictAlgorithm.replace,
-    );
+    await db.insert('cards', cardData);
   }
 
   Future<List<Map<String, dynamic>>> fetchUnsyncedCards() async {
     final db = await database;
-    return await db.query(
-      'credit_cards',
-      where: 'synced = ?',
-      whereArgs: [0],
-    );
+    return await db.query('cards', where: 'synced = ?', whereArgs: [0]);
   }
 
-  Future<void> markAsSynced(int id) async {
+  Future<void> markAsSynced(int cardId) async {
     final db = await database;
-    await db.update(
-      'credit_cards',
-      {'synced': 1},
-      where: 'id = ?',
-      whereArgs: [id],
-    );
+    await db.update('cards', {'synced': 1}, where: 'id = ?', whereArgs: [cardId]);
   }
 
   Future<List<Map<String, dynamic>>> fetchAllCards() async {
     final db = await database;
-    return await db.query('credit_cards');
-  }
-
-  Future<void> deleteCard(int id) async {
-    final db = await database;
-    await db.delete(
-      'credit_cards',
-      where: 'id = ?',
-      whereArgs: [id],
-    );
-  }
-
-  Future<void> clearDatabase() async {
-    final db = await database;
-    await db.delete('credit_cards');
+    return await db.query('cards');
   }
 }

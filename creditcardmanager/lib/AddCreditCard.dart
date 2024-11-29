@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
+
+import 'database_helper.dart';
 
 class AddCreditCardPage extends StatefulWidget {
   const AddCreditCardPage({Key? key}) : super(key: key);
@@ -10,8 +13,6 @@ class AddCreditCardPage extends StatefulWidget {
 
 class _AddCreditCardPageState extends State<AddCreditCardPage> {
   final _formKey = GlobalKey<FormState>();
-  final FirebaseFirestore firestore = FirebaseFirestore.instance;
-
   final TextEditingController cardNumberController = TextEditingController();
   final TextEditingController companyController = TextEditingController();
   final TextEditingController dueDateController = TextEditingController();
@@ -19,6 +20,8 @@ class _AddCreditCardPageState extends State<AddCreditCardPage> {
   final TextEditingController totalDueController = TextEditingController();
 
   bool _isProcessing = false;
+  final firestore = FirebaseFirestore.instance;
+  final localDatabase = LocalDatabase.instance;
 
   @override
   Widget build(BuildContext context) {
@@ -38,7 +41,7 @@ class _AddCreditCardPageState extends State<AddCreditCardPage> {
         ),
         backgroundColor: Colors.black,
       ),
-      body: SingleChildScrollView(
+       body: SingleChildScrollView(
         child: Padding(
           padding: const EdgeInsets.all(20.0),
           child: Form(
@@ -109,7 +112,7 @@ class _AddCreditCardPageState extends State<AddCreditCardPage> {
                         width: double.infinity,
                         height: 60,
                         child: ElevatedButton(
-                          onPressed: _submitForm,
+                          onPressed:  _saveCard,
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.grey.shade800,
                             padding: const EdgeInsets.symmetric(vertical: 15),
@@ -188,28 +191,41 @@ class _AddCreditCardPageState extends State<AddCreditCardPage> {
       ),
     );
   }
+  
 
-  Future<void> _submitForm() async {
+  Future<void> _saveCard() async {
     if (_formKey.currentState!.validate()) {
       setState(() {
         _isProcessing = true;
       });
+
+      final cardData = {
+        'cardNumber': cardNumberController.text,
+        'company': companyController.text,
+        'dueDate': dueDateController.text,
+        'currentDueAmount': double.parse(currentDueController.text),
+        'totalDueAmount': double.parse(totalDueController.text),
+        'synced': 0,
+      };
+
       try {
-        await firestore.collection('credit_cards').add({
-          'cardNumber': cardNumberController.text,
-          'company': companyController.text,
-          'dueDate': DateTime.parse(dueDateController.text),
-          'currentDueAmount': double.parse(currentDueController.text),
-          'totalDueAmount': double.parse(totalDueController.text),
-        });
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Card added successfully!'),
-          backgroundColor: Colors.green,
-        ));
+        if (await Connectivity().checkConnectivity() == ConnectivityResult.none) {
+          await localDatabase.insertCard(cardData);
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Card added successfully!'),
+            backgroundColor: Colors.green,
+          ));
+        } else {
+          await firestore.collection('credit_cards').add(cardData);
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Card added successfully!'),
+            backgroundColor: Colors.green,
+          ));
+        }
         Navigator.pop(context);
       } catch (e) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Error: ${e.toString()}'),
+          content: Text('Error: $e'),
           backgroundColor: Colors.red,
         ));
       } finally {

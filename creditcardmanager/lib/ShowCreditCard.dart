@@ -1,10 +1,10 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
-import 'package:creditcardmanager/AddCreditCard.dart';
 import 'package:creditcardmanager/NotificationPage.dart';
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:intl/intl.dart';
 import 'package:creditcardmanager/database_helper.dart';
+import 'package:creditcardmanager/AddCreditCard.dart';
+import 'package:intl/intl.dart';
 
 class CreditCard {
   final String cardNumber;
@@ -26,9 +26,9 @@ class CreditCard {
 
     DateTime dueDate;
     if (dueDateField is Timestamp) {
-      dueDate = dueDateField.toDate(); // Convert Firestore Timestamp to DateTime
+      dueDate = dueDateField.toDate();
     } else if (dueDateField is String) {
-      dueDate = DateTime.parse(dueDateField); // Parse ISO8601 date string
+      dueDate = DateTime.parse(dueDateField);
     } else {
       throw FormatException("Invalid due date format");
     }
@@ -45,41 +45,55 @@ class CreditCard {
 
 class CreditCardListPage extends StatefulWidget {
   @override
-  State<CreditCardListPage> createState() => _CreditCardListPageState();
+  _CreditCardListPageState createState() => _CreditCardListPageState();
 }
 
 class _CreditCardListPageState extends State<CreditCardListPage> {
   final FirebaseFirestore firestore = FirebaseFirestore.instance;
   final LocalDatabase localDatabase = LocalDatabase.instance;
+  List<CreditCard> onlineCards = [];
+  List<CreditCard> offlineCards = [];
 
   @override
   void initState() {
     super.initState();
-    // Check for due dates when the app starts
-    checkDueDates();
-
+    _loadCreditCards();
     Connectivity().onConnectivityChanged.listen((ConnectivityResult result) {
       if (result != ConnectivityResult.none) {
         syncUnsyncedData();
       }
     });
+    checkDueDates(); // Check for due dates when the page loads
   }
 
   Future<void> syncUnsyncedData() async {
     final unsyncedCards = await localDatabase.fetchUnsyncedCards();
     for (final card in unsyncedCards) {
       try {
-        await firestore.collection('credit_cards').add({
-          'cardNumber': card['cardNumber'],
-          'company': card['company'],
-          'dueDate': card['dueDate'],
-          'currentDueAmount': card['currentDueAmount'],
-          'totalDueAmount': card['totalDueAmount'],
-        });
+        await firestore.collection('credit_cards').add(card);
         await localDatabase.markAsSynced(card['id']);
       } catch (e) {
-        print('Sync error: $e');
+        print("Error syncing card: $e");
       }
+    }
+  }
+
+  Future<void> _loadCreditCards() async {
+    final connectivityResult = await Connectivity().checkConnectivity();
+
+    if (connectivityResult == ConnectivityResult.none) {
+      // Offline mode: load from local database
+      final offlineData = await localDatabase.fetchAllCards();
+      offlineCards = offlineData.map((data) => CreditCard.fromFirestore(data)).toList();
+      setState(() {});
+    } else {
+      // Online mode: load from Firestore and listen for real-time updates
+      firestore.collection('credit_cards').snapshots().listen((snapshot) {
+        onlineCards = snapshot.docs
+            .map((doc) => CreditCard.fromFirestore(doc.data() as Map<String, dynamic>))
+            .toList();
+        setState(() {});
+      });
     }
   }
 
@@ -115,26 +129,31 @@ class _CreditCardListPageState extends State<CreditCardListPage> {
             '${card.company} (****${card.cardNumber.substring(card.cardNumber.length - 4)})')
         .join('\n');
 
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Upcoming Due Dates'),
-        content: Text(
-          'The following cards have a due date tomorrow:\n\n$cardDetails',
-          style: const TextStyle(fontSize: 16),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('OK'),
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Upcoming Due Dates'),
+          content: Text(
+            'The following cards have a due date tomorrow:\n\n$cardDetails',
+            style: const TextStyle(fontSize: 16),
           ),
-        ],
-      ),
-    );
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+    });
   }
 
   @override
   Widget build(BuildContext context) {
+    final allCards = [...offlineCards, ...onlineCards];
+    allCards.sort((a, b) => a.dueDate.compareTo(b.dueDate));
+
     return Scaffold(
       appBar: AppBar(
         centerTitle: true,
@@ -144,46 +163,30 @@ class _CreditCardListPageState extends State<CreditCardListPage> {
         ),
         backgroundColor: Colors.black,
         actions: [
-        IconButton(
-          icon: const Icon(Icons.notifications, color: Colors.white),
-          tooltip: 'Notifications',
-          onPressed: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => NotificationPage()),
-            );
-          },
-        ),
-      ],
-      ),
-      body: StreamBuilder<QuerySnapshot>(
-        stream: firestore.collection('credit_cards').snapshots(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (snapshot.hasError) {
-            return const Center(child: Text('Error fetching data'));
-          }
-          if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-            return const Center(child: Text('No credit cards available'));
-          }
-
-          final creditCards = snapshot.data!.docs.map((doc) {
-            return CreditCard.fromFirestore(doc.data() as Map<String, dynamic>);
-          }).toList();
-
-          creditCards.sort((a, b) => a.dueDate.compareTo(b.dueDate));
-
-          return ListView.builder(
-            itemCount: creditCards.length,
-            itemBuilder: (context, index) {
-              final card = creditCards[index];
-              return CreditCardWidget(creditCard: card);
+          IconButton(
+            icon: const Icon(Icons.notifications, color: Colors.white),
+            tooltip: 'Notifications',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => NotificationPage()),
+              );
             },
-          );
-        },
+          ),
+        ],
       ),
+      body: allCards.isEmpty
+          ? const Center(child: CircularProgressIndicator())
+          : RefreshIndicator(
+              onRefresh: _loadCreditCards,
+              child: ListView.builder(
+                itemCount: allCards.length,
+                itemBuilder: (context, index) {
+                  final card = allCards[index];
+                  return CreditCardWidget(creditCard: card);  // Use CreditCardWidget here
+                },
+              ),
+            ),
       floatingActionButton: FloatingActionButton(
         onPressed: () {
           Navigator.push(
@@ -201,8 +204,7 @@ class _CreditCardListPageState extends State<CreditCardListPage> {
 class CreditCardWidget extends StatelessWidget {
   final CreditCard creditCard;
 
-  const CreditCardWidget({Key? key, required this.creditCard})
-      : super(key: key);
+  const CreditCardWidget({Key? key, required this.creditCard}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
