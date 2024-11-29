@@ -1,0 +1,13 @@
+ 'creditcardmanager/.metadata' -text  
+ 'creditcardmanager/android/app/build.gradle' -text  
+ 'creditcardmanager/android/app/google-services.json'  -text  
+ 'creditcardmanager/android/settings.gradle'    -text  
+ 'creditcardmanager/lib/firebase_options.dart'  -text  
+  'creditcardmanager/linux/flutter/generated_plugin_registrant.cc'  -text    
+  'creditcardmanager/linux/flutter/generated_plugin_registrant.h'   -text   
+  'creditcardmanager/linux/flutter/generated_plugins.cmake'     -text   
+  'creditcardmanager/macos/Flutter/GeneratedPluginRegistrant.swift'     -text    
+  'creditcardmanager/pubspec.lock'  -text    
+  'creditcardmanager/windows/flutter/generated_plugin_registrant.cc'    -text    
+  'creditcardmanager/windows/flutter/generated_plugin_registrant.h' -text    
+  'creditcardmanager/windows/flutter/generated_plugins.cmake'   -text    

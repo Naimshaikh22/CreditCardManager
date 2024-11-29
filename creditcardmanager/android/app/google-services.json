@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "101994831800",
+    "project_id": "credit-card-manager-44254",
+    "storage_bucket": "credit-card-manager-44254.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:101994831800:android:00438b8adac9b810d4394d",
+        "android_client_info": {
+          "package_name": "com.example.creditcardmanager"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB0Iu4XeEQwngu7_qXOqRBjE5yk1F73C90"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
